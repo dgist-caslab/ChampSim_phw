@@ -29,7 +29,7 @@
 #include "phase_info.h"
 #include "tracereader.h"
 
-constexpr int DEADLOCK_CYCLE{500};
+constexpr int DEADLOCK_CYCLE{50000}; // [PHW] 500-> 50000 for increased latency of DRAM
 
 const auto start_time = std::chrono::steady_clock::now();
 

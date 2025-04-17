@@ -175,8 +175,7 @@
         "tRP": 24,
         "tRAS": 52,
         "refresh_period": 32,
-        "refreshes_per_period": 8192,
-        "tADD": 160
+        "refreshes_per_period": 8192
     },
 
     "virtual_memory": {
