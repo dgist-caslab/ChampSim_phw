@@ -275,7 +275,17 @@ class NormalizedConfiguration:
         # The name 'DRAM' is reserved for the physical memory
         self.caches = {k:v for k,v in self.caches.items() if k != 'DRAM'}
 
+        # [PHW] TMA is a boolean that determines if the TMA is enabled
+        self.tma = config_file.get('TMA', False)
+
         self.pmem = config_file.get('physical_memory', {})
+
+        # [PHW] pmem_cxl is a dictionary that contains the configuration for the CXL memory
+        self.pmem_cxl = config_file.get('physical_memory_cxl', {})
+
+        # [PHW] If TMA is enabled, pmem_cxl must be specified
+        if self.tma and not self.pmem_cxl:
+            raise ValueError('[PHW] TMA is enabled but pmem_cxl is not specified')
         
         #this allows frequency to be specified instead of data rate or vice-versa for DRAM
         if('frequency' in self.pmem.keys()):
@@ -284,8 +294,19 @@ class NormalizedConfiguration:
         elif('data_rate' in self.pmem.keys()):
             self.pmem['frequency'] = self.pmem['data_rate']/2
 
+        # [PHW] This allows frequency to be specified instead of data rate or vice-versa for CXL
+        if self.pmem_cxl:
+            if('frequency' in self.pmem_cxl.keys()):
+                self.pmem_cxl['data_rate'] = self.pmem_cxl['frequency']
+                self.pmem_cxl['frequency'] = self.pmem_cxl['frequency']/2
+            elif('data_rate' in self.pmem_cxl.keys()):
+                self.pmem_cxl['frequency'] = self.pmem_cxl['data_rate']/2
+
         if verbose:
             print('P: pmem', list(self.pmem.keys()))
+            if self.tma: # [PHW] Only print pmem_cxl if TMA is enabled
+                print('P: tma_enabled')
+                print('P: pmem_cxl', list(self.pmem_cxl.keys()))
 
         self.vmem = config_file.get('virtual_memory', {})
 
@@ -302,8 +323,20 @@ class NormalizedConfiguration:
         self.caches = util.chain(self.caches, rhs.caches)
         self.ptws = util.chain(self.ptws, rhs.ptws)
         self.pmem = util.chain(self.pmem, rhs.pmem)
+        self.tma = self.tma or rhs.tma # [PHW] Merge tma
+        self.pmem_cxl = util.chain(self.pmem_cxl, rhs.pmem_cxl) # [PHW] Merge pmem_cxl
         self.vmem = util.chain(self.vmem, rhs.vmem)
         self.root = util.chain(self.root, rhs.root)
+
+        if self.tma and not self.pmem_cxl:
+            self.tma_valid = False
+        else:
+            self.tma_valid = True
+
+    def add_cxl_to_llc(self, tma, pmem_cxl):
+        if tma and pmem_cxl:
+            return ({'name': 'LLC', 'lower_level_cxl': 'CXL'},)
+        return ()
 
     def apply_defaults_in(self, branch_context, btb_context, prefetcher_context, replacement_context, verbose=False):
         ''' Apply defaults and produce a result suitible for writing the generated files. '''
@@ -331,9 +364,18 @@ class NormalizedConfiguration:
         pmem = util.chain(self.pmem, {
             'name': 'DRAM', 'data_rate': 3200, 'frequency': 1600, 'channels': 1, 'ranks': 1, 'bankgroups': 8, 'banks': 4, 'bank_rows': 65536, 'bank_columns': 1024,
             'channel_width': 8, 'wq_size': 64, 'rq_size': 64, 'tRP': 24, 'tRCD': 24, 'tCAS': 24, 'tRAS' : 52,
-            'refresh_period': 32, 'refreshes_per_period': 8192
+            'refresh_period': 32, 'refreshes_per_period': 8192, 'tADD': 0
         })
         pmem = util.chain(pmem,(do_deprecation(pmem, pmem_deprecation_keys,pmem_deprecation_warnings)))
+
+        # [PHW]
+        pmem_cxl = None
+        if self.tma and self.pmem_cxl:
+            pmem_cxl = util.chain(self.pmem_cxl, {
+                'name': 'CXL', 'data_rate': 3200, 'frequency': 1600, 'channels': 1, 'ranks': 4, 'bankgroups': 8, 'banks': 4, 'bank_rows': 65536, 'bank_columns': 1024,
+                'channel_width': 8, 'wq_size': 64, 'rq_size': 64, 'tRP': 24, 'tRCD': 24, 'tCAS': 24, 'tRAS' : 52,
+                'refresh_period': 32, 'refreshes_per_period': 8192, 'tADD': 160
+            })
         
         #convert vmem boolean to string
         vmem = util.chain(
@@ -398,6 +440,9 @@ class NormalizedConfiguration:
                 path_end_in(util.iter_system(caches, cpu['DTLB']), cpu['PTW'])
              ) for cpu in cores),
 
+            # [PHW] for cxl
+            self.add_cxl_to_llc(self.tma, pmem_cxl),
+
             ({ 'name': k,
                 # Mark queues that need to match full addresses on collision
                '_queue_check_full_addr': cache.get('_first_level', False) or cache.get('wq_check_full_addr', False),
@@ -434,7 +479,9 @@ class NormalizedConfiguration:
             'caches': tuple(caches.values()),
             'ptws': tuple(ptws.values()),
             'pmem': pmem,
-            'vmem': vmem
+            'vmem': vmem,
+            'tma': self.tma,
+            'pmem_cxl': pmem_cxl
         }
         module_info = {
             'repl': util.combine_named(*(c['_replacement_data'] for c in caches.values()), replacement_context.find_all()),
@@ -475,6 +522,9 @@ def parse_config(*configs, module_dir=None, branch_dir=None, btb_dir=None, pref_
         return lhs
     merged_config = functools.reduce(do_merge, (NormalizedConfiguration(c, verbose=verbose) for c in configs))
 
+    if merged_config.tma and not merged_config.tma_valid:
+        raise ValueError('[PHW] TMA is enabled but pmem_cxl is not specified')
+
     contexts = dict(
         branch_context = modules.ModuleSearchContext(list_dirs('branch', branch_dir or []), verbose=verbose),
         btb_context = modules.ModuleSearchContext(list_dirs('btb', btb_dir or []), verbose=verbose),
@@ -485,6 +535,8 @@ def parse_config(*configs, module_dir=None, branch_dir=None, btb_dir=None, pref_
         for k,v in contexts.items():
             print(k, v.paths)
     elements, module_info, config_file = merged_config.apply_defaults_in(**contexts, verbose=verbose)
+
+    config_file['tma'] = merged_config.tma
 
     if compile_all_modules:
         modules_to_compile = [*set(itertools.chain(*(d.keys() for d in module_info.values())))]

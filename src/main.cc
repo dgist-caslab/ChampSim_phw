@@ -47,6 +47,8 @@ const std::size_t NUM_CPUS = configured_environment::num_cpus;
 
 const unsigned BLOCK_SIZE = configured_environment::block_size;
 const unsigned PAGE_SIZE = configured_environment::page_size;
+
+const std::size_t DRAM_MAX_ADDR = configured_environment::dram_max_addr;
 #endif
 const unsigned LOG2_BLOCK_SIZE = champsim::lg2(BLOCK_SIZE);
 const unsigned LOG2_PAGE_SIZE = champsim::lg2(PAGE_SIZE);

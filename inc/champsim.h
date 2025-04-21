@@ -32,6 +32,9 @@ extern const unsigned PAGE_SIZE;
 extern const unsigned LOG2_BLOCK_SIZE;
 extern const unsigned LOG2_PAGE_SIZE;
 
+// [PHW] for cxl
+extern const std::size_t DRAM_MAX_ADDR;
+
 namespace champsim
 {
 struct deadlock : public std::exception {
@@ -83,6 +86,15 @@ auto lowest_address_for_size(data::bytes sz) -> address;
  * Get the lowest possible address for which the space between it and zero is the given bit width.
  */
 auto lowest_address_for_width(data::bits width) -> address;
+
+inline bool is_cxl_addr(uint64_t addr){
+  return addr >= DRAM_MAX_ADDR;
+}
+
+inline bool is_cxl_pfn(uint64_t pfn){
+  return pfn >= (DRAM_MAX_ADDR >> LOG2_PAGE_SIZE);
+}
+
 } // namespace champsim
 
 #endif
