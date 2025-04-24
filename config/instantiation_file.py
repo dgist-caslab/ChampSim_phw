@@ -341,7 +341,7 @@ def decorate_queues(caches, ptws, pmem, pmem_cxl=None):
 def get_queue_info(ul_pairs, decoration):
     return [decoration.get(ll) for ll,_ in ul_pairs]
 
-def get_instantiation_lines(cores, caches, ptws, pmem, vmem, build_id, tma=False, pmem_cxl=None):
+def get_instantiation_lines(cores, caches, ptws, pmem, vmem, build_id, tma=False, pmem_cxl=None, page_stat=False):
     '''
     Generate the lines for a C++ file that instantiates a configuration.
     '''
@@ -481,7 +481,7 @@ def get_instantiation_lines(cores, caches, ptws, pmem, vmem, build_id, tma=False
         yield from cxx.function(f'{classname}::cxl_view', [f'return nullptr;'], rtype='MEMORY_CONTROLLER&')
     yield ''
 
-def get_instantiation_header(num_cpus, env, build_id, tma=False, pmem=None):
+def get_instantiation_header(num_cpus, env, build_id, tma=False, pmem=None, page_stat=False):
     # [PHW] for cxl
     dram_max_addr = 0
     if pmem:
@@ -510,6 +510,7 @@ def get_instantiation_header(num_cpus, env, build_id, tma=False, pmem=None):
         f'constexpr static std::size_t block_size = {env["block_size"]};',
         f'constexpr static std::size_t page_size = {env["page_size"]};',
         f'constexpr static std::size_t dram_max_addr = {dram_max_addr};',
+        f'constexpr static bool enable_page_stats = {str(page_stat).lower()};',
 
         'generated_environment();',
         'std::vector<std::reference_wrapper<O3_CPU>> cpu_view() final;',

@@ -26,6 +26,8 @@
 #include "util/bit_enum.h"
 #include "util/ratio.h"
 
+#include "page_stat.h"
+
 extern const std::size_t NUM_CPUS;
 extern const unsigned BLOCK_SIZE;
 extern const unsigned PAGE_SIZE;
@@ -34,6 +36,10 @@ extern const unsigned LOG2_PAGE_SIZE;
 
 // [PHW] for cxl
 extern const std::size_t DRAM_MAX_ADDR;
+
+// [PHW] for per-page stats
+extern const bool ENABLE_PAGE_STATS;
+extern page_stat_logger g_page_stat_logger;
 
 namespace champsim
 {

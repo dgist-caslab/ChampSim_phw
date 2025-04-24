@@ -303,6 +303,25 @@ bool CACHE::try_hit(const tag_lookup_type& handle_pkt)
       way->prefetch = false;
     }
   }
+  // [PHW] page stat start
+  if (ENABLE_PAGE_STATS) {
+    if(this->NAME.find("L1D") != std::string::npos || this->NAME.find("L2C") != std::string::npos || this->NAME.find("LLC") != std::string::npos){
+      uint64_t pfn = handle_pkt.address.to<uint64_t>() >> LOG2_PAGE_SIZE;
+      uint64_t vfn = handle_pkt.v_address.to<uint64_t>() >> LOG2_PAGE_SIZE;
+      std::string caller = this->NAME;
+      PAGE_STAT_EVENT event;
+      if(hit){
+        event = PAGE_STAT_EVENT::HIT;
+      }else{
+        event = PAGE_STAT_EVENT::MISS;
+      }
+      if(useful_prefetch){ // override hit 
+        event = PAGE_STAT_EVENT::USEFUL_PREFETCH;
+      }
+      g_page_stat_logger.event_log(caller, event, pfn, vfn, handle_pkt.cpu, 0);
+    }
+  }
+  // [PHW] page stat end
 
   return hit;
 }
@@ -634,6 +653,12 @@ bool CACHE::prefetch_line(champsim::address pf_addr, bool fill_this_level, uint3
   internal_PQ.emplace_back(pf_packet, true, !fill_this_level);
   ++sim_stats.pf_issued;
 
+  if (ENABLE_PAGE_STATS) {
+    if(this->NAME.find("L1D") != std::string::npos || this->NAME.find("L2C") != std::string::npos || this->NAME.find("LLC") != std::string::npos){
+      uint64_t pfn = pf_addr.to<uint64_t>() >> LOG2_PAGE_SIZE;
+      g_page_stat_logger.event_log(this->NAME, PAGE_STAT_EVENT::PREFETCH, pfn, 0, cpu, 0);
+    }
+  }
   return true;
 }
 

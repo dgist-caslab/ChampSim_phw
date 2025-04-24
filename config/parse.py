@@ -278,6 +278,9 @@ class NormalizedConfiguration:
         # [PHW] TMA is a boolean that determines if the TMA is enabled
         self.tma = config_file.get('TMA', False)
 
+        # [PHW] enable per-page stat
+        self.page_stat = config_file.get('page_stat', False)
+
         self.pmem = config_file.get('physical_memory', {})
 
         # [PHW] pmem_cxl is a dictionary that contains the configuration for the CXL memory
@@ -324,6 +327,7 @@ class NormalizedConfiguration:
         self.ptws = util.chain(self.ptws, rhs.ptws)
         self.pmem = util.chain(self.pmem, rhs.pmem)
         self.tma = self.tma or rhs.tma # [PHW] Merge tma
+        self.page_stat = self.page_stat or rhs.page_stat # [PHW] Merge page_stat
         self.pmem_cxl = util.chain(self.pmem_cxl, rhs.pmem_cxl) # [PHW] Merge pmem_cxl
         self.vmem = util.chain(self.vmem, rhs.vmem)
         self.root = util.chain(self.root, rhs.root)
@@ -481,6 +485,7 @@ class NormalizedConfiguration:
             'pmem': pmem,
             'vmem': vmem,
             'tma': self.tma,
+            'page_stat': self.page_stat,
             'pmem_cxl': pmem_cxl
         }
         module_info = {

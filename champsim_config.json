@@ -5,6 +5,7 @@
     "heartbeat_frequency": 10000000,
     "num_cores": 1,
     "TMA": true,
+    "page_stat": true,
 
     "ooo_cpu": [
         {
@@ -166,7 +167,7 @@
         "ranks": 1,
         "bankgroups": 8,
         "banks": 4,
-        "bank_rows": 16,
+        "bank_rows": 65536,
         "bank_columns": 1024,
         "channel_width": 8,
         "wq_size": 64,
