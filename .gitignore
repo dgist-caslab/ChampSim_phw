@@ -1,3 +1,6 @@
+absolute.options
+scripts/exp_env.py
+
 .cursor
 .cursorignore
 .trash
@@ -22,3 +25,4 @@ vcpkg_installed/
 
 **/_build
 **/_doxygen
+
