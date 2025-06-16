@@ -2,10 +2,10 @@
 #include "champsim.h"
 
 page_stat_logger::page_stat_logger() {
-    l1c_pf_degree.resize(NUM_CPUS, 0);
+    l1d_pf_degree.resize(NUM_CPUS, 0);
     l2c_pf_degree.resize(NUM_CPUS, 0);
     llc_pf_degree = 0;
-    l1c_prev_pf_addr.resize(NUM_CPUS, 0);
+    l1d_prev_pf_addr.resize(NUM_CPUS, 0);
     l2c_prev_pf_addr.resize(NUM_CPUS, 0);
     llc_prev_pf_addr = 0;
 }
@@ -62,11 +62,11 @@ page_stat* page_stat_logger::alloc_page_stat(){
     page_stat* stat = new page_stat();
     memset(stat, 0, sizeof(page_stat));
 
-    stat->l1c = new stats();
+    stat->l1d = new stats();
     stat->l2c = new stats();
     stat->llc = new stats();
 
-    memset(stat->l1c, 0, sizeof(stats));
+    memset(stat->l1d, 0, sizeof(stats));
     memset(stat->l2c, 0, sizeof(stats));
     memset(stat->llc, 0, sizeof(stats));
 
@@ -77,7 +77,7 @@ bool page_stat_logger::free_unmapped_page_stat(page_stat* stat){
     if (stat == nullptr){
       return false;
     }
-    delete stat->l1c;
+    delete stat->l1d;
     delete stat->l2c;
     delete stat->llc;
     // mapped page should not call this funciton
@@ -91,9 +91,9 @@ bool page_stat_logger::free_unmapped_page_stat(page_stat* stat){
 void page_stat_logger::merge_page_stat(page_stat* src, page_stat* dst)
 {
   // merge src into dst
-  // l1c
-  dst->l1c->hit += src->l1c->hit;
-  dst->l1c->miss += src->l1c->miss;
+  // l1d
+  dst->l1d->hit += src->l1d->hit;
+  dst->l1d->miss += src->l1d->miss;
 
   // l2c
   dst->l2c->hit += src->l2c->hit;
@@ -129,22 +129,22 @@ bool page_stat_logger::event_log(std::string caller, PAGE_STAT_EVENT event, uint
     stat->cpu = cpu;
     unmapped_stat_vfn[std::make_pair(vfn, cpu)] = *stat;
   }
-  if(stat->l1c == nullptr || stat->l2c == nullptr || stat->llc == nullptr){
+  if(stat->l1d == nullptr || stat->l2c == nullptr || stat->llc == nullptr){
     stat->pfn = pfn;
-    stat->l1c = new stats();
+    stat->l1d = new stats();
     stat->l2c = new stats();
     stat->llc = new stats();
-    memset(stat->l1c, 0, sizeof(stats));
+    memset(stat->l1d, 0, sizeof(stats));
     memset(stat->l2c, 0, sizeof(stats));
     memset(stat->llc, 0, sizeof(stats));
   }
 
   switch (event_type) {
   case PAGE_STAT_CALLER::L1D + PAGE_STAT_EVENT::HIT:
-    stat->l1c->hit++;
+    stat->l1d->hit++;
     break;
   case PAGE_STAT_CALLER::L1D + PAGE_STAT_EVENT::MISS:
-    stat->l1c->miss++;
+    stat->l1d->miss++;
     break;
   case PAGE_STAT_CALLER::L2C + PAGE_STAT_EVENT::HIT:
     stat->l2c->hit++;
@@ -159,8 +159,8 @@ bool page_stat_logger::event_log(std::string caller, PAGE_STAT_EVENT event, uint
     stat->llc->miss++;
     break;
   case PAGE_STAT_CALLER::L1D + PAGE_STAT_EVENT::USEFUL_PREFETCH:
-    stat->l1c->hit++;
-    stat->l1c->useful_prefetch_hit++;
+    stat->l1d->hit++;
+    stat->l1d->useful_prefetch_hit++;
     break;
   case PAGE_STAT_CALLER::L2C + PAGE_STAT_EVENT::USEFUL_PREFETCH:
     stat->l2c->hit++;
@@ -171,14 +171,48 @@ bool page_stat_logger::event_log(std::string caller, PAGE_STAT_EVENT event, uint
     stat->llc->useful_prefetch_hit++;
     break;
   case PAGE_STAT_CALLER::L1D + PAGE_STAT_EVENT::PREFETCH:
-    if(l1c_prev_pf_addr[cpu] == pfn){
-        l1c_pf_degree[cpu]++;
+    if(l1d_prev_pf_addr[cpu] == pfn){
+        l1d_pf_degree[cpu]++;
     }else{
-        // find prev pfn's stat structure
-        // l1c_prev_pf_addr[cpu] = pfn;
-        // stat->pf_degree_sum += l1c_pf_degree[cpu];
-        // stat->pf_degree_cnt++;
-        // l1c_pf_degree[cpu] = 0;
+      page_stat* prev_stat = find_page_stat_by_pfn(l1d_prev_pf_addr[cpu]);
+      if(prev_stat != nullptr){
+        prev_stat->l1d->pf_degree_sum += l1d_pf_degree[cpu];
+        prev_stat->l1d->pf_degree_cnt++;
+      }else{
+        fmt::print("[PAGE_STAT] WARNING: prev stat is nullptr\n");
+      }
+      l1d_pf_degree[cpu] = 0;
+      l1d_prev_pf_addr[cpu] = pfn;
+    }
+    break;
+  case PAGE_STAT_CALLER::L2C + PAGE_STAT_EVENT::PREFETCH:
+    if(l2c_prev_pf_addr[cpu] == pfn){
+        l2c_pf_degree[cpu]++;
+    }else{
+      page_stat* prev_stat = find_page_stat_by_pfn(l2c_prev_pf_addr[cpu]);
+      if(prev_stat != nullptr){
+        prev_stat->l2c->pf_degree_sum += l2c_pf_degree[cpu];
+        prev_stat->l2c->pf_degree_cnt++;
+      }else{
+        fmt::print("[PAGE_STAT] WARNING: prev stat is nullptr\n");
+      }
+      l2c_pf_degree[cpu] = 0;
+      l2c_prev_pf_addr[cpu] = pfn;
+    }
+    break;
+  case PAGE_STAT_CALLER::LLC + PAGE_STAT_EVENT::PREFETCH:
+    if(llc_prev_pf_addr == pfn){
+        llc_pf_degree++;
+    }else{
+        page_stat* prev_stat = find_page_stat_by_pfn(llc_prev_pf_addr);
+        if(prev_stat != nullptr){
+            prev_stat->llc->pf_degree_sum += llc_pf_degree;
+            prev_stat->llc->pf_degree_cnt++;
+        }else{
+            fmt::print("[PAGE_STAT] WARNING: prev stat is nullptr\n");
+        }
+        llc_pf_degree = 0;
+        llc_prev_pf_addr = pfn;
     }
     break;
   default:
@@ -190,19 +224,31 @@ bool page_stat_logger::event_log(std::string caller, PAGE_STAT_EVENT event, uint
 
 void page_stat_logger::print_page_stat_map_to_csv(){
     fmt::print("[START_PAGE_STAT] Printing page stat map to csv format\n");
-    fmt::print("pfn,vfn,cpu,l1c_hit,l1c_miss,l2c_hit,l2c_miss,llc_hit,llc_miss\n");
+    fmt::print("pfn,vfn,cpu,l1d_hit,l1d_miss,l1d_prefetch,l1d_useful_prefetch_hit,l1d_pf_degree_sum,l1d_pf_degree_cnt,l2c_hit,l2c_miss,l2c_prefetch,l2c_useful_prefetch_hit,l2c_pf_degree_sum,l2c_pf_degree_cnt,llc_hit,llc_miss,llc_prefetch,llc_useful_prefetch_hit,llc_pf_degree_sum,llc_pf_degree_cnt\n");
     for (auto &[pfn, page_stat] : page_stat_map){
         if(page_stat.mapped){
-            fmt::print("{},{},{},{},{},{},{},{},{}\n",
+            fmt::print("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
             pfn, 
             page_stat.vfn,
             page_stat.cpu,
-            page_stat.l1c->hit,
-            page_stat.l1c->miss,
+            page_stat.l1d->hit,
+            page_stat.l1d->miss,
+            page_stat.l1d->prefetch,
+            page_stat.l1d->useful_prefetch_hit,
+            page_stat.l1d->pf_degree_sum,
+            page_stat.l1d->pf_degree_cnt,
             page_stat.l2c->hit,
             page_stat.l2c->miss,
+            page_stat.l2c->prefetch,
+            page_stat.l2c->useful_prefetch_hit,
+            page_stat.l2c->pf_degree_sum,
+            page_stat.l2c->pf_degree_cnt,
             page_stat.llc->hit,
-            page_stat.llc->miss);
+            page_stat.llc->miss,
+            page_stat.llc->prefetch,
+            page_stat.llc->useful_prefetch_hit,
+            page_stat.llc->pf_degree_sum,
+            page_stat.llc->pf_degree_cnt);
         }
     }
     fmt::print("[END_PAGE_STAT] mapped_pages_dram: {}, mapped_pages_cxl: {}\n", num_mapped_pages_dram, num_mapped_pages_cxl);

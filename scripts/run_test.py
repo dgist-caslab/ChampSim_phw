@@ -9,7 +9,7 @@ import common
 
 WARM_INST = 1000000
 SIM_INST = 5000000
-TEST_TRACE=exp_env.TRACE_ROOT + "/spec/605.mcf_s-1152B.champsimtrace.xz"
+TEST_TRACE=exp_env.TRACE_ROOT + "/spec/410.bwaves-1963B.champsimtrace.xz"
 
 def run_champsim_with_log(trace, warmup_inst, sim_inst, bin_suffix=""):
     bin_path=exp_env.SIM_BIN + bin_suffix

@@ -33,7 +33,6 @@ struct stats{
 
     // about prefetch
     uint64_t prefetch;
-    uint64_t prefetch_hit;
     uint64_t useful_prefetch_hit;
     uint64_t pf_degree_sum;
     uint64_t pf_degree_cnt;
@@ -43,7 +42,7 @@ struct page_stat{
     uint64_t pfn;
     uint64_t vfn;
     int cpu;
-    stats *l1c;
+    stats *l1d;
     stats *l2c;
     stats *llc;
 
@@ -65,10 +64,10 @@ class page_stat_logger{
         std::map<std::pair<uint64_t, int>, page_stat> reverse_map; // vfn, cpu -> page_stat
         std::map<std::pair<uint64_t, int>, page_stat> unmapped_stat_vfn;
 
-        std::vector<uint64_t> l1c_prev_pf_addr;
+        std::vector<uint64_t> l1d_prev_pf_addr;
         std::vector<uint64_t> l2c_prev_pf_addr;
         uint64_t llc_prev_pf_addr;
-        std::vector<uint8_t> l1c_pf_degree;
+        std::vector<uint8_t> l1d_pf_degree;
         std::vector<uint8_t> l2c_pf_degree;
         uint8_t llc_pf_degree;
 
