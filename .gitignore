@@ -1,5 +1,8 @@
 absolute.options
 
+.clang-format
+.clang-tidy
+
 .cursor
 .cursorignore
 .trash

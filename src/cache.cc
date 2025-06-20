@@ -239,6 +239,14 @@ bool CACHE::handle_fill(const mshr_type& fill_mshr)
   if (way != set_end) {
     if (way->valid && way->prefetch) {
       ++sim_stats.pf_useless;
+      if(ENABLE_PAGE_STATS){
+        if(this->NAME.find("L1D") != std::string::npos || this->NAME.find("L2C") != std::string::npos || this->NAME.find("LLC") != std::string::npos){
+          uint64_t pfn = fill_mshr.address.to<uint64_t>() >> LOG2_PAGE_SIZE;
+          uint64_t vfn = fill_mshr.v_address.to<uint64_t>() >> LOG2_PAGE_SIZE;
+          std::string caller = this->NAME;
+          g_page_stat_logger.event_log(caller, PAGE_STAT_EVENT::USELESS_PREFETCH, pfn, vfn, fill_mshr.cpu, 0);
+        }
+      }
     }
 
     if (fill_mshr.type == access_type::PREFETCH) {
@@ -373,6 +381,15 @@ bool CACHE::handle_miss(const tag_lookup_type& handle_pkt)
     if (mshr_entry->type == access_type::PREFETCH && handle_pkt.type != access_type::PREFETCH) {
       // Mark the prefetch as useful
       if (mshr_entry->prefetch_from_this) {
+        // [PHW] request already prefethced. but, it's not completed.
+        if(ENABLE_PAGE_STATS){
+          if (this->NAME.find("L1D") != std::string::npos || this->NAME.find("L2C") != std::string::npos || this->NAME.find("LLC") != std::string::npos){
+            uint64_t pfn = handle_pkt.address.to<uint64_t>() >> LOG2_PAGE_SIZE;
+            uint64_t vfn = handle_pkt.v_address.to<uint64_t>() >> LOG2_PAGE_SIZE;
+            std::string caller = this->NAME;
+            g_page_stat_logger.event_log(caller, PAGE_STAT_EVENT::MSHR_PREFETCH_HIT, pfn, vfn, handle_pkt.cpu, 0);
+          }
+        }
         ++sim_stats.pf_useful;
       }
     }

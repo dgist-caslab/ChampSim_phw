@@ -19,6 +19,8 @@ enum PAGE_STAT_EVENT {
     MISS = 1,
     USEFUL_PREFETCH = 2,
     PREFETCH = 3,
+    USELESS_PREFETCH = 4,
+    MSHR_PREFETCH_HIT = 5,
 };
 
 enum PAGE_STAT_CALLER {
@@ -34,8 +36,10 @@ struct stats{
     // about prefetch
     uint64_t prefetch;
     uint64_t useful_prefetch_hit;
+    uint64_t mshr_prefetch_hit;
     uint64_t pf_degree_sum;
     uint64_t pf_degree_cnt;
+    uint64_t useless_prefetch;
 }; 
 
 struct page_stat{

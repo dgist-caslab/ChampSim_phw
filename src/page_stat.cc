@@ -94,14 +94,29 @@ void page_stat_logger::merge_page_stat(page_stat* src, page_stat* dst)
   // l1d
   dst->l1d->hit += src->l1d->hit;
   dst->l1d->miss += src->l1d->miss;
+  dst->l1d->prefetch += src->l1d->prefetch;
+  dst->l1d->useful_prefetch_hit += src->l1d->useful_prefetch_hit;
+  dst->l1d->pf_degree_sum += src->l1d->pf_degree_sum;
+  dst->l1d->pf_degree_cnt += src->l1d->pf_degree_cnt;
+  dst->l1d->useless_prefetch += src->l1d->useless_prefetch;
 
   // l2c
   dst->l2c->hit += src->l2c->hit;
   dst->l2c->miss += src->l2c->miss;
+  dst->l2c->prefetch += src->l2c->prefetch;
+  dst->l2c->useful_prefetch_hit += src->l2c->useful_prefetch_hit;
+  dst->l2c->pf_degree_sum += src->l2c->pf_degree_sum;
+  dst->l2c->pf_degree_cnt += src->l2c->pf_degree_cnt;
+  dst->l2c->useless_prefetch += src->l2c->useless_prefetch;
 
   // llc
   dst->llc->hit += src->llc->hit;
   dst->llc->miss += src->llc->miss;
+  dst->llc->prefetch += src->llc->prefetch;
+  dst->llc->useful_prefetch_hit += src->llc->useful_prefetch_hit;
+  dst->llc->pf_degree_sum += src->llc->pf_degree_sum;
+  dst->llc->pf_degree_cnt += src->llc->pf_degree_cnt;
+  dst->llc->useless_prefetch += src->llc->useless_prefetch;
 }
 
 bool page_stat_logger::event_log(std::string caller, PAGE_STAT_EVENT event, uint64_t pfn, uint64_t vfn, int cpu, uint64_t value)
@@ -114,7 +129,7 @@ bool page_stat_logger::event_log(std::string caller, PAGE_STAT_EVENT event, uint
   }else if(caller.find("LLC") != std::string::npos){
     caller_type = PAGE_STAT_CALLER::LLC;
   }else{
-    fmt::print("[PAGE_STAT] WARNING: unknown caller\n");
+    fmt::print("[PAGE_STAT] WARNING: not registered caller: {}\n", caller);
     return false;
   }
   int event_type = caller_type + event;
@@ -179,7 +194,7 @@ bool page_stat_logger::event_log(std::string caller, PAGE_STAT_EVENT event, uint
         prev_stat->l1d->pf_degree_sum += l1d_pf_degree[cpu];
         prev_stat->l1d->pf_degree_cnt++;
       }else{
-        fmt::print("[PAGE_STAT] WARNING: prev stat is nullptr\n");
+        fmt::print("[PAGE_STAT] WARNING: prev stat is nullptr. if this is the first prefetch, it's normal\n");
       }
       l1d_pf_degree[cpu] = 0;
       l1d_prev_pf_addr[cpu] = pfn;
@@ -194,7 +209,7 @@ bool page_stat_logger::event_log(std::string caller, PAGE_STAT_EVENT event, uint
         prev_stat->l2c->pf_degree_sum += l2c_pf_degree[cpu];
         prev_stat->l2c->pf_degree_cnt++;
       }else{
-        fmt::print("[PAGE_STAT] WARNING: prev stat is nullptr\n");
+        fmt::print("[PAGE_STAT] WARNING: prev stat is nullptr. if this is the first prefetch, it's normal\n");
       }
       l2c_pf_degree[cpu] = 0;
       l2c_prev_pf_addr[cpu] = pfn;
@@ -209,11 +224,29 @@ bool page_stat_logger::event_log(std::string caller, PAGE_STAT_EVENT event, uint
             prev_stat->llc->pf_degree_sum += llc_pf_degree;
             prev_stat->llc->pf_degree_cnt++;
         }else{
-            fmt::print("[PAGE_STAT] WARNING: prev stat is nullptr\n");
+            fmt::print("[PAGE_STAT] WARNING: prev stat is nullptr. if this is the first prefetch, it's normal\n");
         }
         llc_pf_degree = 0;
         llc_prev_pf_addr = pfn;
     }
+    break;
+  case PAGE_STAT_CALLER::L1D + PAGE_STAT_EVENT::USELESS_PREFETCH:
+    stat->l1d->useless_prefetch++;
+    break;
+  case PAGE_STAT_CALLER::L2C + PAGE_STAT_EVENT::USELESS_PREFETCH:
+    stat->l2c->useless_prefetch++;
+    break;
+  case PAGE_STAT_CALLER::LLC + PAGE_STAT_EVENT::USELESS_PREFETCH:
+    stat->llc->useless_prefetch++;
+    break;
+  case PAGE_STAT_CALLER::L1D + PAGE_STAT_EVENT::MSHR_PREFETCH_HIT:
+    stat->l1d->mshr_prefetch_hit++;
+    break;
+  case PAGE_STAT_CALLER::L2C + PAGE_STAT_EVENT::MSHR_PREFETCH_HIT:
+    stat->l2c->mshr_prefetch_hit++;
+    break;
+  case PAGE_STAT_CALLER::LLC + PAGE_STAT_EVENT::MSHR_PREFETCH_HIT:
+    stat->llc->mshr_prefetch_hit++;
     break;
   default:
     fmt::print("[PAGE_STAT] WARNING: unknown event: {} {}\n", caller, event);
@@ -224,10 +257,10 @@ bool page_stat_logger::event_log(std::string caller, PAGE_STAT_EVENT event, uint
 
 void page_stat_logger::print_page_stat_map_to_csv(){
     fmt::print("[START_PAGE_STAT] Printing page stat map to csv format\n");
-    fmt::print("pfn,vfn,cpu,l1d_hit,l1d_miss,l1d_prefetch,l1d_useful_prefetch_hit,l1d_pf_degree_sum,l1d_pf_degree_cnt,l2c_hit,l2c_miss,l2c_prefetch,l2c_useful_prefetch_hit,l2c_pf_degree_sum,l2c_pf_degree_cnt,llc_hit,llc_miss,llc_prefetch,llc_useful_prefetch_hit,llc_pf_degree_sum,llc_pf_degree_cnt\n");
+    fmt::print("pfn,vfn,cpu,l1d_hit,l1d_miss,l1d_prefetch,l1d_useful_prefetch_hit,l1d_pf_degree_sum,l1d_pf_degree_cnt,l1d_useless_prefetch,l1d_mshr_prefetch_hit,l2c_hit,l2c_miss,l2c_prefetch,l2c_useful_prefetch_hit,l2c_pf_degree_sum,l2c_pf_degree_cnt,l2c_useless_prefetch,l2c_mshr_prefetch_hit,llc_hit,llc_miss,llc_prefetch,llc_useful_prefetch_hit,llc_pf_degree_sum,llc_pf_degree_cnt,llc_useless_prefetch,llc_mshr_prefetch_hit\n");
     for (auto &[pfn, page_stat] : page_stat_map){
         if(page_stat.mapped){
-            fmt::print("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
+            fmt::print("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
             pfn, 
             page_stat.vfn,
             page_stat.cpu,
@@ -235,20 +268,29 @@ void page_stat_logger::print_page_stat_map_to_csv(){
             page_stat.l1d->miss,
             page_stat.l1d->prefetch,
             page_stat.l1d->useful_prefetch_hit,
+            page_stat.l1d->mshr_prefetch_hit,
             page_stat.l1d->pf_degree_sum,
             page_stat.l1d->pf_degree_cnt,
+            page_stat.l1d->useless_prefetch,
+            page_stat.l1d->mshr_prefetch_hit,
             page_stat.l2c->hit,
             page_stat.l2c->miss,
             page_stat.l2c->prefetch,
             page_stat.l2c->useful_prefetch_hit,
+            page_stat.l2c->mshr_prefetch_hit,
             page_stat.l2c->pf_degree_sum,
             page_stat.l2c->pf_degree_cnt,
+            page_stat.l2c->useless_prefetch,
+            page_stat.l2c->mshr_prefetch_hit,
             page_stat.llc->hit,
             page_stat.llc->miss,
             page_stat.llc->prefetch,
             page_stat.llc->useful_prefetch_hit,
+            page_stat.llc->mshr_prefetch_hit,
             page_stat.llc->pf_degree_sum,
-            page_stat.llc->pf_degree_cnt);
+            page_stat.llc->pf_degree_cnt,
+            page_stat.llc->useless_prefetch,
+            page_stat.llc->mshr_prefetch_hit);
         }
     }
     fmt::print("[END_PAGE_STAT] mapped_pages_dram: {}, mapped_pages_cxl: {}\n", num_mapped_pages_dram, num_mapped_pages_cxl);
